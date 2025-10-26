@@ -50,6 +50,8 @@
             margin-bottom: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-height: 600px;
+            overflow-y: auto;
         }
         button {
             background: #007cba;
@@ -76,7 +78,11 @@
             padding: 8px;
             border-bottom: 1px solid #eee;
             font-family: monospace;
-            font-size: 12px;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        .url-item:hover {
+            background: #f9f9f9;
         }
         .count-badge {
             background: #007cba;
@@ -85,6 +91,25 @@
             border-radius: 12px;
             font-size: 12px;
             margin-left: 10px;
+        }
+        .url-count {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #007cba;
+        }
+        .full-list-notice {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -106,10 +131,9 @@
     </div>
     
     <div style="text-align: center; margin: 20px 0;">
-    <button onclick="compareUrls()" id="compareBtn">Сравнить URL</button>
-    <button onclick="downloadResults()" id="downloadBtn" style="margin-left: 10px; background: #28a745;">📥 Скачать CSV</button>
-    <button onclick="exportToSheets()" id="sheetsBtn" style="margin-left: 10px; background: #34a853;">📊 Google Sheets</button>
-</div>
+        <button onclick="compareUrls()" id="compareBtn">Сравнить URL</button>
+        <button onclick="downloadResults()" id="downloadBtn" style="margin-left: 10px; background: #28a745;">📥 Скачать CSV</button>
+    </div>
     
     <div class="loading" id="loading">
         <p>⏳ Обрабатываем URL... Это может занять несколько секунд</p>
@@ -119,17 +143,29 @@
         <div class="stats" id="stats"></div>
         
         <div class="result-section">
-            <h3>✅ Одинаковые URL <span class="count-badge" id="sameCount">0</span></h3>
+            <div class="section-header">
+                <h3>✅ Одинаковые URL</h3>
+                <span class="count-badge" id="sameCount">0</span>
+            </div>
+            <div class="full-list-notice">Показаны все совпадающие URL</div>
             <div id="sameUrls"></div>
         </div>
         
         <div class="result-section">
-            <h3>📂 Только в старом сайте <span class="count-badge" id="onlyOldCount">0</span></h3>
+            <div class="section-header">
+                <h3>📂 Только в старом сайте</h3>
+                <span class="count-badge" id="onlyOldCount">0</span>
+            </div>
+            <div class="full-list-notice">Показаны все URL, которые есть только в старом сайте</div>
             <div id="onlyOldUrls"></div>
         </div>
         
         <div class="result-section">
-            <h3>🆕 Только в новом сайте <span class="count-badge" id="onlyNewCount">0</span></h3>
+            <div class="section-header">
+                <h3>🆕 Только в новом сайте</h3>
+                <span class="count-badge" id="onlyNewCount">0</span>
+            </div>
+            <div class="full-list-notice">Показаны все URL, которые есть только в новом сайте</div>
             <div id="onlyNewUrls"></div>
         </div>
     </div>
@@ -189,6 +225,56 @@
             });
         }
         
+        function downloadResults() {
+            const oldUrls = document.getElementById('oldUrls').value;
+            const newUrls = document.getElementById('newUrls').value;
+            const btn = document.getElementById('downloadBtn');
+            
+            if (!oldUrls.trim() || !newUrls.trim()) {
+                alert('Пожалуйста, заполните оба списка URL');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '📥 Скачиваем...';
+            
+            fetch('/download-results', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    old_urls: oldUrls,
+                    new_urls: newUrls
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Ошибка сервера');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = 'url_comparison_results.zip';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                alert('✅ Файлы успешно скачаны!');
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('❌ Ошибка скачивания: ' + error.message);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = '📥 Скачать CSV';
+            });
+        }
+        
         function displayResults(results) {
             // Статистика
             const stats = results.статистика;
@@ -201,87 +287,46 @@
                 <p>🆕 Только в новом: <strong>${stats.только_в_новом}</strong></p>
             `;
             
-            // Одинаковые URL
+            // Одинаковые URL - ПОЛНЫЙ СПИСОК
             document.getElementById('sameCount').textContent = stats.одинаковые;
-            displayUrlList('sameUrls', results.одинаковые_URL, item => 
+            displayFullUrlList('sameUrls', results.одинаковые_URL, item => 
                 `<div class="url-item">
                     <strong>${item.путь}</strong><br>
-                    Старый: ${item.старый}<br>
-                    Новый: ${item.новый}
+                    <span style="color: #d63384;">Старый: ${item.старый}</span><br>
+                    <span style="color: #0d6efd;">Новый: ${item.новый}</span>
                 </div>`
             );
             
-            // Только в старом
+            // Только в старом - ПОЛНЫЙ СПИСОК
             document.getElementById('onlyOldCount').textContent = stats.только_в_старом;
-            displayUrlList('onlyOldUrls', results.только_в_старом, item => 
+            displayFullUrlList('onlyOldUrls', results.только_в_старом, item => 
                 `<div class="url-item">
                     <strong>${item.путь}</strong><br>
-                    ${item.url}
+                    <span style="color: #d63384;">${item.url}</span>
                 </div>`
             );
             
-            // Только в новом
+            // Только в новом - ПОЛНЫЙ СПИСОК
             document.getElementById('onlyNewCount').textContent = stats.только_в_новом;
-            displayUrlList('onlyNewUrls', results.только_в_новом, item => 
+            displayFullUrlList('onlyNewUrls', results.только_в_новом, item => 
                 `<div class="url-item">
                     <strong>${item.путь}</strong><br>
-                    ${item.url}
+                    <span style="color: #0d6efd;">${item.url}</span>
                 </div>`
             );
             
             document.getElementById('results').style.display = 'block';
         }
         
-        function displayUrlList(elementId, items, template) {
+        function displayFullUrlList(elementId, items, template) {
             const container = document.getElementById(elementId);
             if (items.length === 0) {
-                container.innerHTML = '<p>Нет результатов</p>';
+                container.innerHTML = '<p style="padding: 20px; text-align: center; color: #666;">Нет результатов</p>';
             } else {
-                container.innerHTML = items.slice(0, 100).map(template).join('');
-                if (items.length > 100) {
-                    container.innerHTML += `<p>... и еще ${items.length - 100} URL</p>`;
-                }
+                // Показываем ВСЕ элементы
+                container.innerHTML = items.map(template).join('');
             }
         }
-        function downloadResults() {
-    const oldUrls = document.getElementById('oldUrls').value;
-    const newUrls = document.getElementById('newUrls').value;
-    
-    if (!oldUrls.trim() || !newUrls.trim()) {
-        alert('Пожалуйста, заполните оба списка URL');
-        return;
-    }
-    
-    fetch('/download-results', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            old_urls: oldUrls,
-            new_urls: newUrls
-        })
-    })
-    .then(response => response.blob())
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'url_comparison_results.zip';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        alert('Файлы успешно скачаны!');
-    })
-    .catch(error => {
-        alert('Ошибка скачивания: ' + error);
-    });
-}
-
-function exportToSheets() {
-    alert('Функция Google Sheets требует настройки API ключа. Используйте скачивание CSV для начала.');
-}
     </script>
 </body>
 </html>
