@@ -243,6 +243,45 @@
                 }
             }
         }
+        function downloadResults() {
+    const oldUrls = document.getElementById('oldUrls').value;
+    const newUrls = document.getElementById('newUrls').value;
+    
+    if (!oldUrls.trim() || !newUrls.trim()) {
+        alert('Пожалуйста, заполните оба списка URL');
+        return;
+    }
+    
+    fetch('/download-results', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            old_urls: oldUrls,
+            new_urls: newUrls
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'url_comparison_results.zip';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        alert('Файлы успешно скачаны!');
+    })
+    .catch(error => {
+        alert('Ошибка скачивания: ' + error);
+    });
+}
+
+function exportToSheets() {
+    alert('Функция Google Sheets требует настройки API ключа. Используйте скачивание CSV для начала.');
+}
     </script>
 </body>
 </html>
