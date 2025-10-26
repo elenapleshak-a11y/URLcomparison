@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сравнение URL сайтов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .url-column {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+        .stats {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .results {
+            display: none;
+        }
+        .result-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007cba;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #005a87;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .url-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .count-badge {
+            background: #007cba;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 Сравнение URL двух сайтов</h1>
+    
+    <div class="container">
+        <div class="url-column">
+            <h3>📄 Старый сайт</h3>
+            <textarea id="oldUrls" placeholder="Вставьте URL старого сайта (по одному на строку)&#10;https://old-site.ru/page1&#10;https://old-site.ru/page2&#10;..."></textarea>
+            <div class="url-count">URL: <span id="oldCount">0</span></div>
+        </div>
+        
+        <div class="url-column">
+            <h3>🆕 Новый сайт</h3>
+            <textarea id="newUrls" placeholder="Вставьте URL нового сайта (по одному на строку)&#10;https://new-site.com/page1&#10;https://new-site.com/page2&#10;..."></textarea>
+            <div class="url-count">URL: <span id="newCount">0</span></div>
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin: 20px 0;">
+        <button onclick="compareUrls()" id="compareBtn">Сравнить URL</button>
+    </div>
+    
+    <div class="loading" id="loading">
+        <p>⏳ Обрабатываем URL... Это может занять несколько секунд</p>
+    </div>
+    
+    <div class="results" id="results">
+        <div class="stats" id="stats"></div>
+        
+        <div class="result-section">
+            <h3>✅ Одинаковые URL <span class="count-badge" id="sameCount">0</span></h3>
+            <div id="sameUrls"></div>
+        </div>
+        
+        <div class="result-section">
+            <h3>📂 Только в старом сайте <span class="count-badge" id="onlyOldCount">0</span></h3>
+            <div id="onlyOldUrls"></div>
+        </div>
+        
+        <div class="result-section">
+            <h3>🆕 Только в новом сайте <span class="count-badge" id="onlyNewCount">0</span></h3>
+            <div id="onlyNewUrls"></div>
+        </div>
+    </div>
+
+    <script>
+        // Счетчики URL
+        document.getElementById('oldUrls').addEventListener('input', function() {
+            const count = this.value.split('\n').filter(line => line.trim()).length;
+            document.getElementById('oldCount').textContent = count;
+        });
+        
+        document.getElementById('newUrls').addEventListener('input', function() {
+            const count = this.value.split('\n').filter(line => line.trim()).length;
+            document.getElementById('newCount').textContent = count;
+        });
+        
+        function compareUrls() {
+            const oldUrls = document.getElementById('oldUrls').value;
+            const newUrls = document.getElementById('newUrls').value;
+            const btn = document.getElementById('compareBtn');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            
+            if (!oldUrls.trim() || !newUrls.trim()) {
+                alert('Пожалуйста, заполните оба списка URL');
+                return;
+            }
+            
+            btn.disabled = true;
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            
+            fetch('/compare', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    old_urls: oldUrls,
+                    new_urls: newUrls
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayResults(data.results);
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Ошибка соединения: ' + error);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                loading.style.display = 'none';
+            });
+        }
+        
+        function displayResults(results) {
+            // Статистика
+            const stats = results.статистика;
+            document.getElementById('stats').innerHTML = `
+                <h2>📊 Статистика сравнения</h2>
+                <p>Всего URL в старом сайте: <strong>${stats.всего_в_старом}</strong></p>
+                <p>Всего URL в новом сайте: <strong>${stats.всего_в_новом}</strong></p>
+                <p>✅ Одинаковые URL: <strong>${stats.одинаковые}</strong></p>
+                <p>📂 Только в старом: <strong>${stats.только_в_старом}</strong></p>
+                <p>🆕 Только в новом: <strong>${stats.только_в_новом}</strong></p>
+            `;
+            
+            // Одинаковые URL
+            document.getElementById('sameCount').textContent = stats.одинаковые;
+            displayUrlList('sameUrls', results.одинаковые_URL, item => 
+                `<div class="url-item">
+                    <strong>${item.путь}</strong><br>
+                    Старый: ${item.старый}<br>
+                    Новый: ${item.новый}
+                </div>`
+            );
+            
+            // Только в старом
+            document.getElementById('onlyOldCount').textContent = stats.только_в_старом;
+            displayUrlList('onlyOldUrls', results.только_в_старом, item => 
+                `<div class="url-item">
+                    <strong>${item.путь}</strong><br>
+                    ${item.url}
+                </div>`
+            );
+            
+            // Только в новом
+            document.getElementById('onlyNewCount').textContent = stats.только_в_новом;
+            displayUrlList('onlyNewUrls', results.только_в_новом, item => 
+                `<div class="url-item">
+                    <strong>${item.путь}</strong><br>
+                    ${item.url}
+                </div>`
+            );
+            
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        function displayUrlList(elementId, items, template) {
+            const container = document.getElementById(elementId);
+            if (items.length === 0) {
+                container.innerHTML = '<p>Нет результатов</p>';
+            } else {
+                container.innerHTML = items.slice(0, 100).map(template).join('');
+                if (items.length > 100) {
+                    container.innerHTML += `<p>... и еще ${items.length - 100} URL</p>`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
